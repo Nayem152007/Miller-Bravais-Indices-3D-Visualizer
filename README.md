@@ -61,23 +61,23 @@ The project was developed as an experiment in using AI to build practical geolog
 
 This tool can be useful for:
 
-Geology students
-Mineralogy and crystallography students
-Understanding hexagonal crystal geometry
-Visualizing Miller–Bravais planes
-Teaching crystallography
-Self-study and exam preparation
+Geology students,
+Mineralogy and crystallography students,
+Understanding hexagonal crystal geometry,
+Visualizing Miller–Bravais planes,
+Teaching crystallography,
+Self-study and exam preparation.
 📌 Future Improvements
 
 Possible future additions include:
 
-Visualization of Miller–Bravais directions [uvtw]
-Automatic calculation of indices from selected planes
-More crystal systems
-Crystal symmetry visualization
-Common crystal forms and faces
-Improved plane labeling
-Additional crystallography learning tools
+Visualization of Miller–Bravais directions [uvtw],
+Automatic calculation of indices from selected planes,
+More crystal systems,
+Crystal symmetry visualization,
+Common crystal forms and faces,
+Improved plane labeling,
+Additional crystallography learning tools.
 👤 Author
 
 Abu Nayem 
