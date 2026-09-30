@@ -1,0 +1,203 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Miller–Bravais Plane Viewer</title>
+<link href="https://fonts.googleapis.com/css2?family=Bricolage+Grotesque:wght@400;600;800&display=swap" rel="stylesheet">
+<style>
+:root{--bg:#f3f1ec;--panel:#fff;--ink:#1d2b2a;--mute:#5d6b69;--line:#cfd6d3;--plane:#0e8a7d;--axis:#b4472d;--edge:#5d6b69;--a:#0e8a7d;
+box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px)}
+@media (prefers-color-scheme:dark){:root:not([data-theme="light"]){--bg:#121a19;--panel:#1a2524;--ink:#e6efed;--mute:#8fa19e;--line:#2b3a38;--plane:#3fd0bd;--axis:#f08a6b;--edge:#8fa19e}}
+:root[data-theme="dark"]{--bg:#121a19;--panel:#1a2524;--ink:#e6efed;--mute:#8fa19e;--line:#2b3a38;--plane:#3fd0bd;--axis:#f08a6b;--edge:#8fa19e}
+*{box-sizing:border-box}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+body{margin:0;background:var(--bg);color:var(--ink);font-family:"Bricolage Grotesque",system-ui,-apple-system,"Segoe UI",sans-serif;line-height:1.45}
+main{max-width:1000px;margin:0 auto;padding:20px 16px 28px}
+h1{font-size:1.7rem;font-weight:800;margin:0 0 2px;letter-spacing:-.02em}
+.sub{color:var(--mute);margin:0 0 18px}
+.grid{display:grid;grid-template-columns:290px 1fr;gap:16px}
+@media(max-width:760px){.grid{grid-template-columns:1fr}}
+.box{background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:16px}
+.row{display:flex;gap:8px}
+.f{flex:1;min-width:0}
+label{display:block;font-size:.85rem;color:var(--mute);margin-bottom:4px}
+input{width:100%;font:inherit;font-size:1.3rem;font-weight:600;text-align:center;padding:8px 4px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink)}
+input:focus-visible,button:focus-visible{outline:2px solid var(--plane);outline-offset:2px}
+input[readonly]{color:var(--plane);border-style:dashed}
+.sym{font-size:2rem;font-weight:800;text-align:center;margin:14px 0 4px}
+.bar{text-decoration:overline;text-decoration-thickness:2px}
+.note{font-size:.85rem;color:var(--mute);text-align:center;margin:0 0 12px}
+table{width:100%;border-collapse:collapse;font-size:.95rem}
+td{padding:5px 0;border-top:1px solid var(--line)}
+td:last-child{text-align:right;font-weight:600}
+.pre{display:flex;flex-wrap:wrap;gap:6px;margin-top:12px}
+button{font:inherit;font-size:.85rem;padding:5px 10px;border:1px solid var(--line);border-radius:8px;background:var(--bg);color:var(--ink);cursor:pointer}
+button:hover{border-color:var(--plane)}
+.cv{padding:0;overflow:hidden}
+canvas{display:block;width:100%;height:440px;touch-action:none;cursor:grab}
+.hint{font-size:.8rem;color:var(--mute);padding:8px 14px;border-top:1px solid var(--line)}
+.warn{color:var(--axis);font-size:.85rem;min-height:1.2em;margin:8px 0 0}
+footer{text-align:center;color:var(--mute);font-size:.9rem;margin-top:20px}
+</style>
+</head>
+<body>
+<main>
+<h1>Miller–Bravais Plane Viewer</h1>
+<p class="sub">Type h, k and l. The i index is worked out for you using i = −(h + k).</p>
+<div class="grid">
+<section class="box">
+<div class="row">
+<div class="f"><label for="h">h</label><input id="h" type="number" step="1" value="1"></div>
+<div class="f"><label for="k">k</label><input id="k" type="number" step="1" value="0"></div>
+<div class="f"><label for="i">i</label><input id="i" readonly tabindex="-1"></div>
+<div class="f"><label for="l">l</label><input id="l" type="number" step="1" value="1"></div>
+</div>
+<div class="sym" id="sym"></div>
+<p class="note" id="note"></p>
+<p class="note" id="shift" style="color:var(--axis);font-weight:600"></p>
+<table>
+<tr><td>Intercept on a₁</td><td id="ia1"></td></tr>
+<tr><td>Intercept on a₂</td><td id="ia2"></td></tr>
+<tr><td>Intercept on a₃</td><td id="ia3"></td></tr>
+<tr><td>Intercept on c</td><td id="ic"></td></tr>
+</table>
+<p class="warn" id="warn"></p>
+<div class="pre" id="pre"></div>
+</section>
+<section class="box cv">
+<canvas id="cv"></canvas>
+<div class="hint">Drag to rotate. Teal = your plane. Red = axes a₁, a₂, a₃, c.</div>
+</section>
+</div>
+<footer>Created by Abu Nayem, Geology-58</footer>
+</main>
+<script>
+(function(){
+var S3=Math.sqrt(3),CR=1.2;
+var cv=document.getElementById('cv'),ctx=cv.getContext('2d');
+var H=document.getElementById('h'),K=document.getElementById('k'),L=document.getElementById('l'),I=document.getElementById('i');
+var yaw=-0.5,pitch=0.5,W=0,Ht=0,dpr=1,O=0;
+
+function css(n){return getComputedStyle(document.documentElement).getPropertyValue(n).trim()}
+function fmt(n){return n<0?'<span class="bar">'+(-n)+'</span>':String(n)}
+function frac(n){if(n===0)return '∞';var r=1/n;var s=Math.abs(n)===1?'1':'1/'+Math.abs(n);return (n<0?'−':'')+s}
+
+function vals(){
+  var h=Math.round(+H.value)||0,k=Math.round(+K.value)||0,l=Math.round(+L.value)||0;
+  return {h:h,k:k,i:-(h+k),l:l};
+}
+
+function proj(p){
+  var cy=Math.cos(yaw),sy=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch);
+  var x=p[0]*cy-p[1]*sy,y=p[0]*sy+p[1]*cy,z=p[2]-(0.5-O)*CR;
+  var Y=y*cp+z*sp,Z=-y*sp+z*cp;
+  var sc=Math.min(W,Ht)/4.2;
+  return [W/2+x*sc,Ht/2-Z*sc];
+}
+
+function clip(poly,n,d){
+  var out=[];
+  for(var a=0;a<poly.length;a++){
+    var p=poly[a],q=poly[(a+1)%poly.length];
+    var dp=n[0]*p[0]+n[1]*p[1]+n[2]*p[2]-d-1e-6,dq=n[0]*q[0]+n[1]*q[1]+n[2]*q[2]-d-1e-6;
+    if(dp<=0)out.push(p);
+    if((dp<0&&dq>0)||(dp>0&&dq<0)){var t=dp/(dp-dq);out.push([p[0]+t*(q[0]-p[0]),p[1]+t*(q[1]-p[1]),p[2]+t*(q[2]-p[2])]);}
+  }
+  return out;
+}
+
+function planePoly(v,s){
+  var zhi=(1-O)*CR+(s-1)*CR,zlo=-O*CR-(s-1)*CR;
+  var N=[v.h,(v.k+v.h/2)*2/S3,v.l/CR],m=N[0]*N[0]+N[1]*N[1]+N[2]*N[2];
+  if(m===0)return [];
+  var p0=[N[0]/m,N[1]/m,N[2]/m],r=Math.sqrt(m);
+  var ref=Math.abs(N[2])<0.9*r?[0,0,1]:[1,0,0];
+  var u=[N[1]*ref[2]-N[2]*ref[1],N[2]*ref[0]-N[0]*ref[2],N[0]*ref[1]-N[1]*ref[0]];
+  var ul=Math.hypot(u[0],u[1],u[2]);u=u.map(function(a){return a/ul*20});
+  var w=[N[1]*u[2]-N[2]*u[1],N[2]*u[0]-N[0]*u[2],N[0]*u[1]-N[1]*u[0]];
+  var wl=Math.hypot(w[0],w[1],w[2]);w=w.map(function(a){return a/wl*20});
+  var poly=[[-1,-1],[1,-1],[1,1],[-1,1]].map(function(c){return [p0[0]+c[0]*u[0]+c[1]*w[0],p0[1]+c[0]*u[1]+c[1]*w[1],p0[2]+c[0]*u[2]+c[1]*w[2]]});
+  for(var j=0;j<6;j++){var th=Math.PI/6+j*Math.PI/3;poly=clip(poly,[Math.cos(th),Math.sin(th),0],S3/2*(1+(s-1)));if(!poly.length)return poly;}
+  poly=clip(poly,[0,0,1],zhi);if(!poly.length)return poly;
+  poly=clip(poly,[0,0,-1],-zlo);
+  return poly;
+}
+
+function line(a,b,col,w,dash){
+  var p=proj(a),q=proj(b);
+  ctx.beginPath();ctx.setLineDash(dash||[]);ctx.strokeStyle=col;ctx.lineWidth=w;ctx.moveTo(p[0],p[1]);ctx.lineTo(q[0],q[1]);ctx.stroke();ctx.setLineDash([]);
+}
+function label(t,p3,col,dx,dy){var p=proj(p3);ctx.fillStyle=col;ctx.font='600 14px "Bricolage Grotesque",system-ui,sans-serif';ctx.fillText(t,p[0]+(dx||6),p[1]+(dy||-6));}
+
+function draw(){
+  var v=vals();O=v.l<0?1:0;
+  document.getElementById('shift').textContent=O?'Origin shifted to the top of the cell (l is negative)':'';
+  var zb=-O*CR,zt=(1-O)*CR,edge=css('--edge'),axis=css('--axis'),pl=css('--plane'),ink=css('--ink');
+  ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,W,Ht);
+  // hexagonal prism (unit cell)
+  var hex=[];for(var a=0;a<6;a++){var t=a*Math.PI/3;hex.push([Math.cos(t),Math.sin(t)]);}
+  for(a=0;a<6;a++){var p=hex[a],q=hex[(a+1)%6];
+    line([p[0],p[1],zb],[q[0],q[1],zb],edge,1.2);
+    line([p[0],p[1],zt],[q[0],q[1],zt],edge,1.2);
+    line([p[0],p[1],zb],[p[0],p[1],zt],edge,1,[4,4]);}
+  // axes
+  var ax=[['a₁',[1,0,0]],['a₂',[-0.5,S3/2,0]],['a₃',[-0.5,-S3/2,0]]];
+  ax.forEach(function(x){var d=x[1];
+    line([0,0,0],[d[0]*1.35,d[1]*1.35,0],axis,2);
+    line([0,0,0],[-d[0]*0.6,-d[1]*0.6,0],axis,1,[3,4]);
+    label(x[0],[d[0]*1.35,d[1]*1.35,0],axis);});
+  line([0,0,0],[0,0,zt+0.3],axis,2);line([0,0,0],[0,0,zb-0.25],axis,1,[3,4]);label('c',[0,0,zt+0.3],axis);
+  ctx.fillStyle=ink;var op=proj([0,0,0]);ctx.beginPath();ctx.arc(op[0],op[1],3,0,7);ctx.fill();label('O',[0,0,0],ink,-14,14);
+  // plane
+  var warn='',poly=planePoly(v,1);
+  if(v.h===0&&v.k===0&&v.l===0){warn='Enter at least one non-zero index.';poly=[];}
+  else if(!poly.length){poly=planePoly(v,2);warn=poly.length?'Plane lies outside the unit cell, so a larger region is shown.':'Plane does not cross the displayed region.';}
+  if(poly.length>2){
+    ctx.beginPath();poly.forEach(function(p3,n){var p=proj(p3);n?ctx.lineTo(p[0],p[1]):ctx.moveTo(p[0],p[1]);});ctx.closePath();
+    ctx.globalAlpha=0.35;ctx.fillStyle=pl;ctx.fill();ctx.globalAlpha=1;ctx.strokeStyle=pl;ctx.lineWidth=2.5;ctx.stroke();
+  }
+  // intercept points
+  var pts=[];
+  if(v.h)pts.push([1/v.h,0,0]);
+  if(v.k)pts.push([-0.5/v.k,S3/2/v.k,0]);
+  if(v.i)pts.push([-0.5/v.i,-S3/2/v.i,0]);
+  if(v.l)pts.push([0,0,CR/v.l]);
+  pts.forEach(function(p3){var p=proj(p3);ctx.beginPath();ctx.arc(p[0],p[1],4.5,0,7);ctx.fillStyle=ink;ctx.fill();});
+  document.getElementById('warn').textContent=warn;
+}
+
+function update(){
+  var v=vals();I.value=v.i;
+  document.getElementById('sym').innerHTML='('+fmt(v.h)+' '+fmt(v.k)+' '+fmt(v.i)+' '+fmt(v.l)+')';
+  document.getElementById('note').textContent='i = −('+v.h+' + '+v.k+') = '+v.i;
+  document.getElementById('ia1').textContent=frac(v.h);
+  document.getElementById('ia2').textContent=frac(v.k);
+  document.getElementById('ia3').textContent=frac(v.i);
+  document.getElementById('ic').textContent=frac(v.l);
+  draw();
+}
+
+function resize(){
+  dpr=window.devicePixelRatio||1;var r=cv.getBoundingClientRect();W=r.width;Ht=r.height;
+  cv.width=Math.round(W*dpr);cv.height=Math.round(Ht*dpr);draw();
+}
+
+[H,K,L].forEach(function(e){e.addEventListener('input',update)});
+var drag=null;
+cv.addEventListener('pointerdown',function(e){drag=[e.clientX,e.clientY];cv.setPointerCapture(e.pointerId);cv.style.cursor='grabbing'});
+cv.addEventListener('pointermove',function(e){if(!drag)return;yaw+=(e.clientX-drag[0])*0.01;pitch=Math.max(-1.5,Math.min(1.5,pitch+(e.clientY-drag[1])*0.01));drag=[e.clientX,e.clientY];draw()});
+cv.addEventListener('pointerup',function(){drag=null;cv.style.cursor='grab'});
+window.addEventListener('resize',resize);
+if(window.matchMedia)window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change',draw);
+
+var presets=[[1,0,0],[0,1,0],[1,1,0],[0,0,1],[1,0,1],[1,1,1],[2,0,1],[1,-1,0]];
+var pre=document.getElementById('pre');
+presets.forEach(function(p){var b=document.createElement('button');b.type='button';var i=-(p[0]+p[1]);b.innerHTML='('+fmt(p[0])+' '+fmt(p[1])+' '+fmt(i)+' '+fmt(p[2])+')';
+  b.onclick=function(){H.value=p[0];K.value=p[1];L.value=p[2];update()};pre.appendChild(b);});
+
+resize();update();
+})();
+</script>
+</body>
+</html>
