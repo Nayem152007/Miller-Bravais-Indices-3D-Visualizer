@@ -43,6 +43,7 @@ HTML
 CSS
 JavaScript
 Web-based 3D visualization
+
 🤖 AI-Assisted Development
 
 This project was developed with extensive assistance from AI tools, primarily ChatGPT and Claude.
@@ -67,6 +68,7 @@ Understanding hexagonal crystal geometry,
 Visualizing Miller–Bravais planes,
 Teaching crystallography,
 Self-study and exam preparation.
+
 📌 Future Improvements
 
 Possible future additions include:
@@ -78,11 +80,13 @@ Crystal symmetry visualization,
 Common crystal forms and faces,
 Improved plane labeling,
 Additional crystallography learning tools.
+
 👤 Author
 
 Abu Nayem 
 
 Geology Student
+
 University of Dhaka
 
 ⭐ If you find this project useful for learning crystallography, consider giving the repository a star!
