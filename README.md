@@ -117,7 +117,7 @@ Open the live demo:
 
 https://nayem152007.github.io/Miller-Bravais-Indices-3D-Visualizer/
 
-🚀 Future Improvements
+## 🚀 Future Improvements
 
 Some features I plan to explore in future versions include:
 
