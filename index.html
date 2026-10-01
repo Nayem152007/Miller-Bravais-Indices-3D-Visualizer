@@ -38,6 +38,14 @@ button:hover{border-color:var(--plane)}
 canvas{display:block;width:100%;height:440px;touch-action:none;cursor:grab}
 .hint{font-size:.8rem;color:var(--mute);padding:8px 14px;border-top:1px solid var(--line)}
 .warn{color:var(--axis);font-size:.85rem;min-height:1.2em;margin:8px 0 0}
+.tabs{display:flex;gap:8px;margin-bottom:14px}
+.tabs button{font-size:.95rem;padding:7px 16px}
+.tabs button.on{background:var(--plane);color:var(--bg);border-color:var(--plane)}
+.acts{display:flex;flex-wrap:wrap;gap:8px;margin-top:14px}
+.qt{margin:0 0 12px;font-weight:600}
+.ok{color:#1f8f4e;font-weight:600}
+.bad{color:var(--axis);font-weight:600}
+@media (prefers-color-scheme:dark){.ok{color:#4ade80}}
 footer{text-align:center;color:var(--mute);font-size:.9rem;margin-top:20px}
 </style>
 </head>
@@ -45,8 +53,9 @@ footer{text-align:center;color:var(--mute);font-size:.9rem;margin-top:20px}
 <main>
 <h1>Miller–Bravais Plane Viewer</h1>
 <p class="sub">Type h, k and l. The i index is worked out for you using i = −(h + k).</p>
+<div class="tabs"><button type="button" id="tv" class="on">Viewer</button><button type="button" id="tq">Quiz</button></div>
 <div class="grid">
-<section class="box">
+<section class="box" id="viewPanel">
 <div class="row">
 <div class="f"><label for="h">h</label><input id="h" type="number" step="1" value="1"></div>
 <div class="f"><label for="k">k</label><input id="k" type="number" step="1" value="0"></div>
@@ -65,9 +74,23 @@ footer{text-align:center;color:var(--mute);font-size:.9rem;margin-top:20px}
 <p class="warn" id="warn"></p>
 <div class="pre" id="pre"></div>
 </section>
+<section class="box" id="quizPanel" hidden>
+<p class="qt">Look at the teal plane. What are its Miller–Bravais indices?</p>
+<div class="row">
+<div class="f"><label for="qh">h</label><input id="qh" type="number" step="1"></div>
+<div class="f"><label for="qk">k</label><input id="qk" type="number" step="1"></div>
+<div class="f"><label for="qi">i</label><input id="qi" readonly tabindex="-1"></div>
+<div class="f"><label for="ql">l</label><input id="ql" type="number" step="1"></div>
+</div>
+<p class="note" style="margin-top:8px">i fills itself: i = −(h + k)</p>
+<div class="acts"><button type="button" id="chk">Check</button><button type="button" id="shw">Show answer</button><button type="button" id="nxt">Next plane</button></div>
+<div class="sym" id="qres"></div>
+<p class="note" id="qmsg"></p>
+<p class="note" id="score"></p>
+</section>
 <section class="box cv">
 <canvas id="cv"></canvas>
-<div class="hint">Drag to rotate. Teal = your plane. Red = axes a₁, a₂, a₃, c.</div>
+<div class="hint" id="hint">Drag to rotate. Teal = your plane. Red = axes a₁, a₂, a₃, c.</div>
 </section>
 </div>
 <footer>Created by Abu Nayem, Geology-58</footer>
@@ -77,7 +100,9 @@ footer{text-align:center;color:var(--mute);font-size:.9rem;margin-top:20px}
 var S3=Math.sqrt(3),CR=1.2;
 var cv=document.getElementById('cv'),ctx=cv.getContext('2d');
 var H=document.getElementById('h'),K=document.getElementById('k'),L=document.getElementById('l'),I=document.getElementById('i');
-var yaw=-0.5,pitch=0.5,W=0,Ht=0,dpr=1,O=0;
+var yaw=-2.25,pitch=0.42,W=0,Ht=0,dpr=1,O=0; // a1 lower-left, a2 right, a3 back, c up (right-handed)
+var mode='view',qp={h:1,k:0,l:1},revealed=false,tried=false,stats={ok:0,n:0};
+function cur(){return mode==='quiz'?{h:qp.h,k:qp.k,i:-(qp.h+qp.k),l:qp.l}:vals();}
 
 function css(n){return getComputedStyle(document.documentElement).getPropertyValue(n).trim()}
 function fmt(n){return n<0?'<span class="bar">'+(-n)+'</span>':String(n)}
@@ -91,7 +116,7 @@ function vals(){
 function proj(p){
   var cy=Math.cos(yaw),sy=Math.sin(yaw),cp=Math.cos(pitch),sp=Math.sin(pitch);
   var x=p[0]*cy-p[1]*sy,y=p[0]*sy+p[1]*cy,z=p[2]-(0.5-O)*CR;
-  var Y=y*cp+z*sp,Z=-y*sp+z*cp;
+  var Z=y*sp+z*cp;
   var sc=Math.min(W,Ht)/4.2;
   return [W/2+x*sc,Ht/2-Z*sc];
 }
@@ -111,6 +136,13 @@ function planePoly(v,s){
   var zhi=(1-O)*CR+(s-1)*CR,zlo=-O*CR-(s-1)*CR;
   var N=[v.h,(v.k+v.h/2)*2/S3,v.l/CR],m=N[0]*N[0]+N[1]*N[1]+N[2]*N[2];
   if(m===0)return [];
+  // plane cuts all four axes (h, k, i, l all non-zero): triangle through its intercepts
+  var ii=-(v.h+v.k);
+  if(v.h&&v.k&&ii&&v.l){
+    var P=[[1/v.h,0,0],[-0.5/v.k,S3/2/v.k,0],[-0.5/ii,-S3/2/ii,0]],bi=0,bj=1,bd=-1;
+    for(var x=0;x<3;x++)for(var y=x+1;y<3;y++){var dd=Math.hypot(P[x][0]-P[y][0],P[x][1]-P[y][1]);if(dd>bd){bd=dd;bi=x;bj=y;}}
+    return [P[bi],P[bj],[0,0,CR/v.l]];
+  }
   var p0=[N[0]/m,N[1]/m,N[2]/m],r=Math.sqrt(m);
   var ref=Math.abs(N[2])<0.9*r?[0,0,1]:[1,0,0];
   var u=[N[1]*ref[2]-N[2]*ref[1],N[2]*ref[0]-N[0]*ref[2],N[0]*ref[1]-N[1]*ref[0]];
@@ -121,6 +153,14 @@ function planePoly(v,s){
   for(var j=0;j<6;j++){var th=Math.PI/6+j*Math.PI/3;poly=clip(poly,[Math.cos(th),Math.sin(th),0],S3/2*(1+(s-1)));if(!poly.length)return poly;}
   poly=clip(poly,[0,0,1],zhi);if(!poly.length)return poly;
   poly=clip(poly,[0,0,-1],-zlo);
+  // slanted plane cutting through the cell: keep only its lowest and highest corners,
+  // so it runs from one side to the opposite side as a parallelogram (no extra side corners)
+  if(poly.length>4&&!(v.h===0&&v.k===0)){
+    var zs=poly.map(function(p){return p[2]}),zmn=Math.min.apply(null,zs),zmx=Math.max.apply(null,zs);
+    var keep=poly.filter(function(p){return Math.abs(p[2]-zmn)<1e-3||Math.abs(p[2]-zmx)<1e-3});
+    var uniq=keep.filter(function(p,i){return keep.every(function(q,j){return j>=i||Math.hypot(p[0]-q[0],p[1]-q[1],p[2]-q[2])>1e-3})});
+    if(uniq.length===4)poly=uniq;
+  }
   return poly;
 }
 
@@ -131,7 +171,7 @@ function line(a,b,col,w,dash){
 function label(t,p3,col,dx,dy){var p=proj(p3);ctx.fillStyle=col;ctx.font='600 14px "Bricolage Grotesque",system-ui,sans-serif';ctx.fillText(t,p[0]+(dx||6),p[1]+(dy||-6));}
 
 function draw(){
-  var v=vals();O=v.l<0?1:0;
+  var v=cur();O=v.l<0?1:0;
   document.getElementById('shift').textContent=O?'Origin shifted to the top of the cell (l is negative)':'';
   var zb=-O*CR,zt=(1-O)*CR,edge=css('--edge'),axis=css('--axis'),pl=css('--plane'),ink=css('--ink');
   ctx.setTransform(dpr,0,0,dpr,0,0);ctx.clearRect(0,0,W,Ht);
@@ -163,7 +203,7 @@ function draw(){
   if(v.k)pts.push([-0.5/v.k,S3/2/v.k,0]);
   if(v.i)pts.push([-0.5/v.i,-S3/2/v.i,0]);
   if(v.l)pts.push([0,0,CR/v.l]);
-  pts.forEach(function(p3){var p=proj(p3);ctx.beginPath();ctx.arc(p[0],p[1],4.5,0,7);ctx.fillStyle=ink;ctx.fill();});
+  if(mode==='view'||revealed)pts.forEach(function(p3){var p=proj(p3);ctx.beginPath();ctx.arc(p[0],p[1],4.5,0,7);ctx.fillStyle=ink;ctx.fill();});
   document.getElementById('warn').textContent=warn;
 }
 
@@ -195,6 +235,59 @@ var presets=[[1,0,0],[0,1,0],[1,1,0],[0,0,1],[1,0,1],[1,1,1],[2,0,1],[1,-1,0]];
 var pre=document.getElementById('pre');
 presets.forEach(function(p){var b=document.createElement('button');b.type='button';var i=-(p[0]+p[1]);b.innerHTML='('+fmt(p[0])+' '+fmt(p[1])+' '+fmt(i)+' '+fmt(p[2])+')';
   b.onclick=function(){H.value=p[0];K.value=p[1];L.value=p[2];update()};pre.appendChild(b);});
+
+// ---------- quiz (added) ----------
+var $=function(x){return document.getElementById(x)};
+var QH=$('qh'),QK=$('qk'),QL=$('ql'),QI=$('qi'),qres=$('qres'),qmsg=$('qmsg'),started=false,POOL=[];
+function polyArea(P){var ax=0,ay=0,az=0,i,a,b;for(i=1;i<P.length-1;i++){a=[P[i][0]-P[0][0],P[i][1]-P[0][1],P[i][2]-P[0][2]];b=[P[i+1][0]-P[0][0],P[i+1][1]-P[0][1],P[i+1][2]-P[0][2]];ax+=a[1]*b[2]-a[2]*b[1];ay+=a[2]*b[0]-a[0]*b[2];az+=a[0]*b[1]-a[1]*b[0];}return Math.hypot(ax,ay,az)/2}
+// only planes that draw cleanly inside the cell
+function buildPool(){
+  var out=[],h,k,l,P,r;
+  for(h=-2;h<=2;h++)for(k=-2;k<=2;k++)for(l=-2;l<=2;l++){
+    if(h===0&&k===0&&Math.abs(l)!==1)continue;
+    O=l<0?1:0;P=planePoly({h:h,k:k,l:l},1);
+    if(P.length<3||polyArea(P)<0.08)continue;
+    r=Math.max.apply(null,P.map(function(p){return Math.hypot(p[0],p[1])}));
+    if(r>1.01)continue;
+    out.push([h,k,l]);
+  }
+  return out;
+}
+function pickQ(){
+  var easy=POOL.filter(function(p){return Math.max(Math.abs(p[0]),Math.abs(p[1]),Math.abs(p[2]))<=1});
+  var src=Math.random()<0.7?easy:POOL,p;
+  do{p=src[Math.floor(Math.random()*src.length)];}while(p[0]===qp.h&&p[1]===qp.k&&p[2]===qp.l);
+  return {h:p[0],k:p[1],l:p[2]};
+}
+function msg(t,c){qmsg.textContent=t;qmsg.className='note '+(c||'')}
+function score(){$('score').textContent='Score: '+stats.ok+' / '+stats.n+' (first try)'}
+function showAns(){qres.innerHTML='('+fmt(qp.h)+' '+fmt(qp.k)+' '+fmt(-(qp.h+qp.k))+' '+fmt(qp.l)+')'}
+function qiUpdate(){QI.value=(QH.value===''||QK.value==='')?'':String(-(Math.round(+QH.value)+Math.round(+QK.value))+0)}
+function newQ(){
+  qp=pickQ();revealed=false;tried=false;
+  QH.value='';QK.value='';QL.value='';QI.value='';qres.innerHTML='';msg('');score();draw();
+}
+function check(){
+  if(QH.value===''||QK.value===''||QL.value===''){msg('Fill in h, k and l first.','bad');return}
+  var good=Math.round(+QH.value)===qp.h&&Math.round(+QK.value)===qp.k&&Math.round(+QL.value)===qp.l;
+  if(!tried){tried=true;stats.n++;if(good)stats.ok++;}
+  if(good){revealed=true;showAns();msg('Correct!','ok');}
+  else msg('Not quite. Read the intercepts again and try once more.','bad');
+  score();draw();
+}
+function setMode(m){
+  mode=m;$('viewPanel').hidden=m==='quiz';$('quizPanel').hidden=m==='view';
+  $('tv').className=m==='view'?'on':'';$('tq').className=m==='quiz'?'on':'';
+  $('hint').textContent=m==='quiz'?'Read the intercepts from the axes, then type h, k, l. The dot O is the origin. Drag to rotate.':'Drag to rotate. Teal = your plane. Red = axes a₁, a₂, a₃, c.';
+  if(m==='quiz'&&!started){started=true;POOL=buildPool();newQ();}else update();
+}
+$('tv').onclick=function(){setMode('view')};
+$('tq').onclick=function(){setMode('quiz')};
+$('chk').onclick=check;
+$('nxt').onclick=newQ;
+$('shw').onclick=function(){if(!tried){tried=true;stats.n++;}revealed=true;showAns();msg('Answer shown.','');score();draw();};
+[QH,QK].forEach(function(e){e.addEventListener('input',qiUpdate)});
+[QH,QK,QL].forEach(function(e){e.addEventListener('keydown',function(ev){if(ev.key==='Enter')check()})});
 
 resize();update();
 })();
